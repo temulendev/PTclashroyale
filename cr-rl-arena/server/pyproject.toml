@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cr-arena-server"
+version = "0.1.0"
+description = "Tournament server for the cr_sim Clash-Royale-style battle simulator."
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+dependencies = [
+    "cr-sim>=0.1.0",       # the gym package (../gym)
+    "websockets>=14.0",    # 14+: the asyncio server whose process_request hook serves the web page
+]
+
+[project.scripts]
+cr-arena = "cr_server.server:run"
+
+[tool.setuptools]
+packages = ["cr_server"]
+
+[tool.setuptools.package-data]
+cr_server = ["web/*.html"]

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "cr-sim"
+version = "0.1.0"
+description = "Deterministic Clash-Royale-style battle simulator for reinforcement learning."
+requires-python = ">=3.9"
+readme = "README.md"
+license = { text = "MIT" }
+keywords = ["reinforcement-learning", "simulator", "clash-royale", "rts"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+gym = ["gymnasium>=0.28", "numpy>=1.23"]
+viz = ["numpy>=1.23"]
+dev = ["pytest>=7", "maturin>=1.7"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "cr_sim._core"
+features = ["pyo3/extension-module"]

@@ -1,0 +1,12 @@
+# Medium-severity fidelity gaps — work checklist
+
+Tracking the medium-severity CR-fidelity gaps. Each item flips to `[x]` (done) or
+`[~]` (deferred, with reason). All verified with `cargo test --release` (21 passing).
+
+- [x] **M1 Targeting & aggro fidelity** — `target_for` leash replaced: a unit now holds its committed target only while it stays inside the card's own aggro radius `sight.max(range)` (was invented `sight + 2.5`); building-only/-preferring priority honored (preferring units re-scan off a held troop); acquisition stays deterministic (nearest valid; ties → lower entity index). Test `m1_leash_drops_target_beyond_sight`.
+- [x] **M2 Projectile dodge windows** — new `proj_homes()`: single-target "tracking" shots home (matches decoded `projectiles.toml` `Homing=true`), splash/area shots commit to the fire-time ground point (dodgeable); explicit per-card `homing` override added. Tests `m2_splash_shot_commits_to_ground`, `m2_single_target_shot_homes`.
+- [x] **M3 Spell cast→travel delay** — spells commit to the ground point at cast time but resolve after a short data-plausible fuse (drop-distance ÷ projectile speed; Zap ~0.25 s, Fireball ~0.5 s); pending casts in reset() state (replay-deterministic); damage/crown/effect unchanged, only time-shifted. Test `m3_spell_has_cast_travel_delay`.
+- [x] **M4 Per-card deploy time** — already data-driven via `d.deploy_ticks`; fallback now tied to the named `DEPLOY_TICKS` constant (was a bare magic number). Test `m4_per_card_deploy_time` (Golem 3.0 s, fallback == DEPLOY_TICKS).
+- [x] **M5 Overtime tiebreak** — sudden death: first player ahead on crowns in OT wins immediately; a tied same-tick exchange keeps play going; lowest-tower-HP only as the final expiry fallback. Tests `m5_overtime_first_tower_wins`, `m5_overtime_simultaneous_exchange_continues`, `m5_overtime_expiry_falls_back_to_tower_hp`.
+- [x] **M6 Multi-unit spawn formation** — `spawn_offset` now places compact per-count formations (pairs, triangle, 2×2, diamond+centre, 2×3, centred grid) instead of one row; offsets <~1 tile, deterministic. Test `m6_formations_are_clusters_not_lines`.
+- [~] **M7 Tick & decision granularity** — DEFERRED (core tick rate). Changing the 20 Hz tick rescales every tuned stat, the stat-reconciled level-11 numbers, and the determinism/perf baseline for no fidelity gain. Agents are asked for a move on every tick. Core tick left at 20 Hz.

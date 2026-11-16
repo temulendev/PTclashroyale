@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Tournament standings</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23ffb829'/%3E%3Cpath d='M5 9l3.5 3L12 7l3.5 5L19 9l-1.2 7.4H6.2z' fill='%231a1200'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090b10; --bg-2: #0e1118; --panel: #12161f; --panel-2: #171c27;
+    --line: #222938; --line-2: #2c3446; --row: #1a1f2b;
+    --fg: #eef1f7; --fg-2: #b9c0d0; --muted: #7d879c; --faint: #566076;
+    --gold: #ffb829;
+    --win: #3ddc97; --loss: #ff6166; --draw: #8f9ab3;
+    --p0: #5aa8ff; --p1: #ff6f91;
+    --disp: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; color: var(--fg); font: 14px/1.45 var(--body);
+    font-feature-settings: "tnum", "cv11"; -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 520px at 78% -160px, rgba(255,184,41,.10), transparent 62%),
+      radial-gradient(900px 480px at 0% -120px, rgba(90,168,255,.09), transparent 60%),
+      var(--bg);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 28px; }
+  button, input { font: inherit; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- podium ---------- */
+  .podium { display: grid; gap: 14px; margin: 28px 0 22px; }
+  .pod { position: relative; overflow: hidden; border-radius: var(--r); background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line); padding: 18px 20px 16px; min-height: 172px; display: flex; flex-direction: column; }
+  .pod::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tone); }
+  .pod[data-rank="1"] { --tone: linear-gradient(90deg, #ffd66b, #ff9d0a); border-color: #4a3a17; background: linear-gradient(180deg, #211b10, #14151a 70%); }
+  .pod[data-rank="2"] { --tone: linear-gradient(90deg, #dfe6f2, #8f9ab3); }
+  .pod[data-rank="3"] { --tone: linear-gradient(90deg, #e9a779, #a8602f); }
+  .pod .no { position: absolute; right: 14px; top: 2px; font: 700 118px/1 var(--disp); color: rgba(255,255,255,.045); pointer-events: none; }
+  .pod[data-rank="1"] .no { color: rgba(255,184,41,.11); }
+  .pod .tag { font: 600 12px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .pod[data-rank="1"] .tag { color: var(--gold); }
+  .pod .nm { font: 600 30px/1.05 var(--disp); letter-spacing: .01em; margin: 9px 0 0; overflow-wrap: anywhere; max-width: 86%;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pod[data-rank="1"] .nm { font-size: 38px; }
+  .pod .row { display: flex; align-items: flex-end; gap: 14px; margin-top: auto; padding-top: 14px; }
+  .pod .rt { font: 700 44px/.9 var(--disp); }
+  .pod[data-rank="1"] .rt { font-size: 56px; color: #ffe2a1; }
+  .pod .meta { color: var(--fg-2); font-size: 12.5px; line-height: 1.5; padding-bottom: 2px; white-space: nowrap; }
+  .pod .meta b { color: var(--fg); font-weight: 600; }
+  .pod svg.sp { margin-left: auto; flex: 0 1 auto; min-width: 0; }
+
+  /* ---------- layout ---------- */
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 372px; gap: 18px; align-items: start; padding-bottom: 44px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+  .ph { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); min-height: 60px; }
+  .ph h2 { margin: 0; font: 600 19px/1 var(--disp); letter-spacing: .09em; text-transform: uppercase; }
+  .ph .ct { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .ph .ct b { color: var(--fg-2); font-weight: 600; }
+  .search { margin-left: auto; position: relative; }
+  .search input { width: 208px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 9px; padding: 8px 12px 8px 34px; font-size: 13px; }
+  .search input::placeholder { color: var(--faint); }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .live { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 9px; border-radius: 999px;
+    background: rgba(255,97,102,.12); color: #ff8a8e; font: 700 11px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+  .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--loss); animation: ping 1.8s infinite; }
+  .live.idle { background: rgba(143,154,179,.12); color: var(--draw); } .live.idle i { background: var(--draw); animation: none; }
+  .live.off { background: rgba(255,184,41,.12); color: var(--gold); } .live.off i { background: var(--gold); animation: none; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(255,97,102,.7); } 70% { box-shadow: 0 0 0 7px rgba(255,97,102,0); } 100% { box-shadow: 0 0 0 0 rgba(255,97,102,0); } }
+
+  /* ---------- table ---------- */
+  table { width: 100%; border-collapse: collapse; }
+  td.agent { width: 36%; max-width: 0; overflow: hidden; }
+  thead th { text-align: left; font: 600 11px/1 var(--body); letter-spacing: .11em; text-transform: uppercase; color: var(--muted);
+    padding: 12px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.num, td.num { text-align: right; }
+  tbody tr.r { cursor: pointer; transition: background .15s; }
+  tbody tr.r:hover { background: rgba(255,255,255,.028); }
+  tbody tr.r.open { background: rgba(255,184,41,.05); }
+  tbody td { padding: 11px 8px; border-bottom: 1px solid var(--row); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child, th:first-child { padding-left: 18px; }
+  td:last-child, th:last-child { padding-right: 18px; }
+  .rk { font: 600 22px/1 var(--disp); color: var(--fg-2); }
+  tr[data-rank="1"] .rk { color: var(--gold); }
+  .mv { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .mv.up { color: var(--win); } .mv.dn { color: var(--loss); } .mv.eq { color: var(--faint); }
+  .who { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .av { position: relative; flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+    font: 700 12px/1 var(--body); letter-spacing: .03em; background: hsl(var(--h) 60% 55% / .16); color: hsl(var(--h) 85% 74%);
+    box-shadow: inset 0 0 0 1px hsl(var(--h) 70% 60% / .28); }
+  .av.on::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--win); border: 2px solid var(--panel); }
+  .who b { display: block; font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rate { font: 600 23px/1 var(--disp); letter-spacing: .01em; }
+  .dl { font-size: 11.5px; font-weight: 600; display: block; margin-top: 3px; }
+  .pos { color: var(--win); } .neg { color: var(--loss); } .zero { color: var(--muted); }
+  .rec { white-space: nowrap; color: var(--fg-2); }
+  .rec b { color: var(--fg); font-weight: 600; }
+  .wr { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
+  .wr i { display: block; width: 46px; height: 5px; border-radius: 99px; background: #232a39; overflow: hidden; }
+  .wr i::after { content: ""; display: block; height: 100%; width: var(--w); border-radius: 99px; background: linear-gradient(90deg, #2bb37a, var(--win)); }
+  .form { display: flex; gap: 4px; }
+  .form span { width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; font: 700 9.5px/1 var(--body); }
+  .form .W { background: rgba(61,220,151,.16); color: var(--win); }
+  .form .L { background: rgba(255,97,102,.14); color: var(--loss); }
+  .form .D { background: rgba(143,154,179,.16); color: var(--draw); }
+  svg.sp path.l { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+  .chev { color: var(--faint); transition: transform .2s; }
+  tr.open .chev { transform: rotate(90deg); color: var(--gold); }
+
+  tr.x td { padding: 0; border-bottom: 1px solid var(--line); background: #0d1017; }
+  .xin { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px; padding: 20px 22px 22px 18px; }
+  .xin h3 { margin: 0 0 10px; font: 600 11px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .chart { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); padding: 12px 12px 8px; }
+  .chart .ax { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-top: 4px; }
+  .chart .pk { position: absolute; top: 10px; left: 14px; font-size: 11.5px; color: var(--muted); }
+  .chart .pk b { color: var(--fg); }
+  .chart .none { height: 150px; display: grid; place-items: center; color: var(--faint); font-size: 12.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .chip { padding: 5px 9px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line-2); font-size: 12px; color: var(--fg-2); text-transform: capitalize; }
+  .bad { color: var(--loss); }
+  .moves { margin: 0 0 18px; font-size: 13px; color: var(--fg-2); }
+  .moves b { color: var(--fg); font-weight: 600; } .moves b.bad { color: var(--loss); }
+  .moves span { display: block; margin-top: 5px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+  .mini { list-style: none; margin: 0; padding: 0; }
+  .mini a, .mini .na { display: grid; grid-template-columns: 20px minmax(0,1fr) auto 54px; gap: 10px; align-items: center; padding: 6px 6px; margin: 0 -6px; font-size: 13px; border-radius: 7px; }
+  .mini li + li { border-top: 1px dashed #1f2533; }
+  .mini a:hover { background: rgba(255,255,255,.04); }
+  .mini .o { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .sc { font: 600 17px/1 var(--disp); }
+  .mini .d { text-align: right; font-size: 12px; font-weight: 600; }
+
+  /* ---------- results feed ---------- */
+  aside { position: sticky; top: 18px; }
+  .feed { list-style: none; margin: 0; padding: 6px 0; max-height: calc(100vh - 150px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), transparent); mask-image: linear-gradient(#000 calc(100% - 44px), transparent); }
+  .m { border-bottom: 1px solid var(--row); }
+  .m:last-child { border-bottom: 0; }
+  .m > a, .m > div { display: block; padding: 11px 18px 12px; }
+  .m > a:hover { background: rgba(255,255,255,.03); }
+  .m.fresh { animation: flash 2.4s ease-out; }
+  @keyframes flash { 0% { background: rgba(255,184,41,.18); } 100% { background: transparent; } }
+  .side { display: grid; grid-template-columns: 3px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 3px 0; }
+  .side i { width: 3px; height: 16px; border-radius: 2px; }
+  .side .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 14px; }
+  .side .c { font: 600 22px/1 var(--disp); color: var(--muted); min-width: 16px; text-align: right; }
+  .side.won .n { color: var(--fg); font-weight: 600; }
+  .side.won .c { color: var(--gold); }
+  .m .ft { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding-left: 13px; color: var(--faint); font-size: 11.5px; }
+  .m .ft b { font-weight: 600; }
+  .m .watch { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 600; opacity: 0; transition: opacity .15s; }
+  .m > a:hover .watch, .m > a:focus-visible .watch { opacity: 1; color: var(--gold); }
+  .badge { font: 700 9.5px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; white-space: nowrap; }
+  .badge.up { background: rgba(255,184,41,.16); color: var(--gold); }
+  .badge.dr { background: rgba(143,154,179,.16); color: var(--draw); }
+  .badge.k3 { background: rgba(90,168,255,.14); color: var(--p0); }
+  .badge.ff { background: rgba(255,97,102,.13); color: var(--loss); }
+  .legend { display: flex; gap: 14px; padding: 10px 18px 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+  .empty { padding: 44px 24px 48px; text-align: center; color: var(--fg-2); }
+  .empty b { display: block; font: 600 26px/1.1 var(--disp); letter-spacing: .03em; text-transform: uppercase; color: var(--fg); margin-bottom: 8px; }
+  .empty p { margin: 0 auto; max-width: 44ch; color: var(--muted); }
+  .feed .empty { padding: 34px 18px; }
+
+  footer { border-top: 1px solid var(--line); padding: 20px 0 38px; color: var(--muted); font-size: 13px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; }
+  code { font: 500 12.5px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--panel-2); border: 1px solid var(--line-2);
+    padding: 6px 9px; border-radius: 7px; color: #ffd98a; overflow-wrap: anywhere; }
+
+  @media (max-width: 1060px) {
+    .grid { grid-template-columns: 1fr; }
+    aside { position: static; }
+    .feed { max-height: 460px; }
+  }
+  @media (max-width: 760px) {
+    .wrap { padding: 0 14px; }
+    .podium { grid-template-columns: 1fr !important; margin-top: 16px; }
+    .pod { min-height: 0; } .pod svg.sp { display: none; }
+    .col-form, .col-trend, .col-wr, .col-rec { display: none; }
+    td.agent { width: 100%; }
+    .search input { width: 140px; }
+    .ph .ct.x { display: none; }
+    .xin { grid-template-columns: 1fr; }
+    .who small { display: none; }
+    .m .watch { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1 class="sr">Tournament standings</h1>
+  <section class="podium" id="podium" aria-label="Top agents" hidden></section>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-standings">
+      <div class="ph">
+        <h2 id="h-standings">Standings</h2><span class="ct" id="count"></span><span class="ct x" id="online"></span>
+        <label class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Find an agent" aria-label="Find an agent" autocomplete="off">
+        </label>
+      </div>
+      <table id="table">
+        <thead><tr>
+          <th scope="col">#</th><th scope="col"><span class="sr">Rank change</span></th><th scope="col">Agent</th>
+          <th scope="col" class="num">Rating</th><th scope="col" class="col-rec">W – L – D</th>
+          <th scope="col" class="num col-wr">Win rate</th><th scope="col" class="col-form">Last 5</th>
+          <th scope="col" class="col-trend">Trend</th><th scope="col"><span class="sr">Details</span></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="none" hidden></div>
+    </section>
+
+    <aside>
+      <section class="panel" aria-labelledby="h-results">
+        <div class="ph">
+          <h2 id="h-results">Results</h2><span class="ct" id="played"></span>
+          <span class="live idle" id="live"><i></i><span>Connecting</span></span>
+        </div>
+        <ol class="feed" id="feed"></ol>
+        <div class="legend"><span><i style="background:var(--p0)"></i>Bottom seat</span><span><i style="background:var(--p1)"></i>Top seat</span></div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Connect an agent</span><code id="ws"></code>
+    <span>then send</span><code>{"t":"join","name":"…","deck":[8 cards]}</code>
+  </div>
+</footer>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let skew = 0; // server clock minus ours, so "2m ago" is right even if this clock is off
+const fmt = {
+  rating: (r) => Math.round(r).toLocaleString("en-US"),
+  delta: (d) => (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d).toFixed(1),
+  pct: (p) => Math.round(p * 100) + "%",
+  dur: (ticks) => { const s = Math.round(ticks / 20); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); },
+  ago: (at) => {
+    const s = Math.max(0, Math.round((Date.now() + skew - at) / 1000));
+    if (s < 8) return "just now";
+    if (s < 60) return s + "s ago";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    if (s < 86400) return Math.floor(s / 3600) + "h ago";
+    return Math.floor(s / 86400) + "d ago";
+  },
+  card: (c) => String(c).replace(/_/g, " "),
+  initials: (n) => (n.split(/[-_\s.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || n.slice(0, 2) || "?").toUpperCase(),
+};
+function hue(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; }
+function spark(vals, w, h, pad) {
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const pts = vals.map((v, i) => [pad + (i * (w - 2 * pad)) / Math.max(1, vals.length - 1), h - pad - ((v - lo) * (h - 2 * pad)) / span]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length - 1];
+  return { line, area: `${line} L${last[0].toFixed(1)} ${h} L${pts[0][0].toFixed(1)} ${h} Z`, last, lo, hi };
+}
+
+let state = null, open = null, query = "", fresh = new Set(), seen = null, gid = 0;
+
+const cls = (d) => (d > 0.05 ? "pos" : d < -0.05 ? "neg" : "zero");
+function sparkSvg(vals, w, h, fill) {
+  if (!vals || vals.length < 2) return "";
+  const s = spark(vals, w, h, 3), up = vals[vals.length - 1] >= vals[0];
+  const c = up ? "var(--win)" : "var(--loss)", id = "g" + ++gid;
+  return `<svg class="sp" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    ${fill ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs><path d="${s.area}" fill="url(#${id})"/>` : ""}
+    <path class="l" d="${s.line}" stroke="${c}"/><circle cx="${s.last[0]}" cy="${s.last[1]}" r="2.4" fill="${c}"/></svg>`;
+}
+const form = (f) => f.length ? `<div class="form" aria-label="Last ${f.length}: ${f.join(" ")}">${f.map((r) => `<span class="${r}">${r}</span>`).join("")}</div>` : "";
+const move = (m) => m > 0 ? `<span class="mv up" title="Up ${m} over the last 30 matches">▲ ${m}</span>` : m < 0 ? `<span class="mv dn" title="Down ${-m} over the last 30 matches">▼ ${-m}</span>` : `<span class="mv eq">—</span>`;
+// moves the agent sent that did nothing (unaffordable card, wrong side, bad reply, ...)
+const ignoredRate = (r) => (r.moves ? r.ignored / r.moves : 0);
+const ignoredNote = (r) => r.ignored ? ` · <span class="${ignoredRate(r) >= 0.25 ? "bad" : ""}" title="${r.ignored.toLocaleString("en-US")} of ${r.moves.toLocaleString("en-US")} moves did nothing">${fmt.pct(ignoredRate(r))} ignored</span>` : "";
+const streak = (s) => s.kind && s.n > 1 ? ` · ${s.n}${s.kind} streak` : "";
+
+function renderPodium() {
+  const top = state.rows.filter((r) => r.games > 0).slice(0, 3), el = $("podium");
+  el.hidden = !top.length;
+  el.style.gridTemplateColumns = ["", "1fr", "1.25fr 1fr", "1.25fr 1fr 1fr"][top.length];
+  const tags = ["Leader", "Second", "Third"];
+  el.innerHTML = top.map((r, i) => `
+    <article class="pod" data-rank="${i + 1}">
+      <span class="no" aria-hidden="true">${i + 1}</span>
+      <span class="tag">${tags[i]}</span>
+      <h3 class="nm" title="${esc(r.name)}">${esc(r.name)}</h3>
+      <div class="row">
+        <div class="rt">${fmt.rating(r.rating)}</div>
+        <div class="meta"><b>${r.wins}</b> W · <b>${r.losses}</b> L · <b>${r.draws}</b> D<br>${fmt.pct(r.winPct)} win rate${streak(r.streak)}</div>
+        ${sparkSvg(r.history, i ? 96 : 168, 46, true)}
+      </div>
+    </article>`).join("");
+}
+function detail(r) {
+  let chart = `<div class="none">The rating chart appears after a couple of matches.</div>`;
+  if (r.history.length > 1) {
+    const s = spark(r.history, 520, 150, 8), c = r.history[r.history.length - 1] >= r.history[0] ? "var(--win)" : "var(--loss)";
+    chart = `<span class="pk">Peak <b>${fmt.rating(r.peak)}</b></span>
+      <svg viewBox="0 0 520 150" width="100%" height="150" preserveAspectRatio="none" role="img" aria-label="Rating history">
+        <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".25"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
+        <path d="${s.area}" fill="url(#dg)"/><path d="${s.line}" fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+      </svg>
+      <div class="ax"><span>${fmt.rating(s.lo)} low</span><span>${fmt.rating(s.hi)} high</span></div>`;
+  }
+  const rec = r.recent.map((m) => {
+    const inner = `<span class="form"><span class="${m.res}">${m.res}</span></span><span class="o">vs ${esc(m.opp)}</span><span class="sc">${m.mine}–${m.theirs}</span>
+      <span class="d ${m.delta == null ? "zero" : cls(m.delta)}">${m.delta == null ? "" : fmt.delta(m.delta)}</span>`;
+    return `<li><a href="/replay?id=${m.id}" title="Watch this match">${inner}</a></li>`;
+  }).join("");
+  return `<tr class="x"><td colspan="9"><div class="xin">
+    <div><h3>Rating${r.history.length > 1 ? `, last ${r.history.length - 1} matches` : ""}</h3><div class="chart">${chart}</div></div>
+    <div>
+      ${r.deck ? `<h3>Deck</h3><div class="chips">${r.deck.map((c) => `<span class="chip">${esc(fmt.card(c))}</span>`).join("")}</div>` : ""}
+      <h3>Moves</h3>
+      <p class="moves">${r.moves ? `<b>${r.moves.toLocaleString("en-US")}</b> sent · <b class="${ignoredRate(r) >= 0.25 ? "bad" : ""}">${r.ignored.toLocaleString("en-US")}</b> ignored (${fmt.pct(ignoredRate(r))})` : "None recorded yet."}
+        <span>An ignored move is one that could not be carried out: a card the agent could not afford, a placement off its own side, or a reply the server could not read.</span></p>
+      <h3>Recent matches</h3>
+      ${rec ? `<ul class="mini">${rec}</ul>` : `<p style="margin:0;color:var(--muted)">No matches yet.</p>`}
+    </div></div></td></tr>`;
+}
+function renderRows() {
+  const q = query.trim().toLowerCase(), all = state.rows;
+  const rows = all.filter((r) => !q || r.name.toLowerCase().includes(q));
+  const on = all.filter((r) => r.online).length;
+  $("count").innerHTML = q ? `<b>${rows.length}</b> of ${all.length}` : `<b>${all.length}</b> agent${all.length === 1 ? "" : "s"}`;
+  $("online").innerHTML = all.length ? `<b>${state.stats.online}</b> online` : "";
+  $("table").hidden = !rows.length;
+  const none = $("none");
+  none.hidden = !!rows.length;
+  if (!all.length) none.innerHTML = `<b>No agents yet</b><p>The standings fill in as soon as two agents connect and play. Connection details are at the bottom of the page.</p>`;
+  else if (!rows.length) none.innerHTML = `<b>No match</b><p>No agent is called “${esc(query)}”.</p>`;
+  $("rows").innerHTML = rows.map((r) => `
+    <tr class="r${open === r.name ? " open" : ""}" data-name="${esc(r.name)}" data-rank="${r.rank}" tabindex="0" role="button" aria-expanded="${open === r.name}">
+      <td><span class="rk">${r.rank}</span></td>
+      <td>${move(r.move)}</td>
+      <td class="agent"><div class="who"><span class="av${r.online ? " on" : ""}" style="--h:${hue(r.name)}"${r.online ? ` title="Connected now"` : ""}>${esc(fmt.initials(r.name))}</span>
+        <div style="min-width:0"><b title="${esc(r.name)}">${esc(r.name)}</b><small>${r.games} match${r.games === 1 ? "" : "es"}${r.ignored ? ignoredNote(r) : ` · peak ${fmt.rating(r.peak)}`}</small></div></div></td>
+      <td class="num"><span class="rate">${fmt.rating(r.rating)}</span>${r.lastDelta == null ? "" : `<span class="dl ${cls(r.lastDelta)}">${fmt.delta(r.lastDelta)}</span>`}</td>
+      <td class="rec col-rec"><b>${r.wins}</b> – ${r.losses} – ${r.draws}</td>
+      <td class="num col-wr"><div class="wr"><span>${r.games ? fmt.pct(r.winPct) : "—"}</span><i style="--w:${Math.round(r.winPct * 100)}%"></i></div></td>
+      <td class="col-form">${form(r.form)}</td>
+      <td class="col-trend">${sparkSvg(r.history.slice(-30), 78, 28, false)}</td>
+      <td><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></td>
+    </tr>${open === r.name ? detail(r) : ""}`).join("");
+}
+function renderFeed() {
+  const s = state.stats, live = $("live");
+  $("played").innerHTML = s.played ? `<b>${s.played.toLocaleString("en-US")}</b> played` : "";
+  live.className = "live" + (s.live ? "" : " idle");
+  live.lastElementChild.textContent = s.live ? `${s.live} live` : "Idle";
+  if (!state.matches.length) {
+    $("feed").innerHTML = `<li class="empty"><p>Finished matches will appear here, newest first.</p></li>`;
+    return;
+  }
+  $("feed").innerHTML = state.matches.map((m) => {
+    const w0 = m.outcome === 1, w1 = m.outcome === 2;
+    const tag = m.forfeit ? `<span class="badge ff">Forfeit</span>` : m.outcome === 3 ? `<span class="badge dr">Draw</span>`
+      : m.upset ? `<span class="badge up">Upset</span>` : Math.max(...m.crowns) === 3 ? `<span class="badge k3">King down</span>`
+      : m.crowns[0] === m.crowns[1] ? `<span class="badge dr" title="Level on crowns; decided by tower health">Tiebreak</span>` : "";
+    const body = `
+      <div class="side${w0 ? " won" : ""}"><i style="background:var(--p0)"></i><span class="n">${esc(m.p0)}</span><span class="c">${m.crowns[0]}</span></div>
+      <div class="side${w1 ? " won" : ""}"><i style="background:var(--p1)"></i><span class="n">${esc(m.p1)}</span><span class="c">${m.crowns[1]}</span></div>
+      <div class="ft"><span>${fmt.ago(m.at)}</span>·<span>${fmt.dur(m.ticks)}</span>${m.delta == null ? "" : `·<span>±<b>${Math.abs(m.delta).toFixed(1)}</b></span>`}${tag}
+        ${m.replay ? `<span class="watch">Watch <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>` : ""}</div>`;
+    const label = `${m.p0} ${m.crowns[0]}, ${m.p1} ${m.crowns[1]}`;
+    return `<li class="m${fresh.has(m.id) ? " fresh" : ""}">${m.replay ? `<a href="/replay?id=${m.id}" aria-label="Watch replay: ${esc(label)}">${body}</a>` : `<div>${body}</div>`}</li>`;
+  }).join("");
+}
+function render() { gid = 0; renderPodium(); renderRows(); renderFeed(); }
+
+$("rows").addEventListener("click", (e) => {
+  if (e.target.closest("a")) return;
+  const tr = e.target.closest("tr.r"); if (!tr) return;
+  open = open === tr.dataset.name ? null : tr.dataset.name; renderRows();
+});
+$("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr.r")) { e.preventDefault(); e.target.click(); } });
+$("q").addEventListener("input", (e) => { query = e.target.value; if (state) renderRows(); });
+$("ws").textContent = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+
+// ---- live data: poll the server, redraw only when something changed ----
+let sig = "", failures = 0;
+async function poll() {
+  try {
+    const res = await fetch("/api/standings", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    skew = data.now - Date.now();
+    failures = 0;
+    const next = JSON.stringify([data.stats, data.matches[0] && data.matches[0].id, data.rows.map((r) => [r.name, r.rating, r.online])]);
+    if (next === sig) return;
+    sig = next;
+    const ids = new Set(data.matches.map((m) => m.id));
+    fresh = new Set(seen ? [...ids].filter((id) => !seen.has(id)) : []);
+    seen = ids;
+    state = data;
+    render();
+  } catch (err) {
+    if (++failures >= 2) { const l = $("live"); l.className = "live off"; l.lastElementChild.textContent = "Reconnecting"; sig = ""; }
+  }
+}
+function loop() { if (!document.hidden) poll(); }
+poll();
+setInterval(loop, 3000);
+setInterval(() => { if (state && !document.hidden) { fresh = new Set(); renderFeed(); } }, 20000); // keep "2m ago" current
+document.addEventListener("visibilitychange", loop);
+</script>
+</body>
+</html>

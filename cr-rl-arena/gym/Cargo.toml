@@ -1,0 +1,29 @@
+[package]
+name = "cr-sim"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Deterministic fixed-point Clash-Royale-style battle simulator for RL."
+
+[lib]
+name = "cr_sim_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.24", features = ["extension-module"] }
+# Worker threads for BatchBattle.step (n battles stepped in parallel, GIL released).
+rayon = "1.10"
+# NOTE: an earlier session flagged serde_json >=1.0.147 (new dep `zmij`) and serde_derive
+# 1.0.229 (new dep `syn 3.x`) as a "supply-chain typosquat" and pinned below them. That was a
+# FALSE POSITIVE: `zmij` is dtolnay's legitimate Schubfach float formatter (the `ryu`
+# successor, same author) and `syn 3.0` is a real new major release -- both simply post-date
+# this tool's Jan-2026 knowledge cutoff. The unjustified upper-bound pins were removed after a
+# forensic re-check (local official crates.io index + build-script/source inspection); nothing
+# in this tree was ever unsafe. See REMAINING_GAPS.md A8 for the full write-up.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
