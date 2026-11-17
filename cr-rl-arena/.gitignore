@@ -32,3 +32,6 @@ gym/viewer/trace.json
 .vscode/
 .idea/
 .DS_Store
+
+# match folders recorded by bot.py / replay.py
+/matches/

@@ -30,6 +30,10 @@
   .brand svg { flex: none; }
   .brand b { font: 600 19px/1 var(--disp); letter-spacing: .09em; text-transform: uppercase; }
   .brand span { color: var(--muted); font-size: 12.5px; }
+  .pick { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .pick select { min-width: 0; max-width: 420px; font: inherit; font-size: 13px; color: var(--fg); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; padding: 7px 10px; }
+  .pick .btn { padding: 6px 10px; }
+  @media (max-width: 640px) { .brand { flex-wrap: wrap; } .pick { margin-left: 0; width: 100%; } .pick select { flex: 1; max-width: none; } }
 
   .stage { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: start; justify-content: center; }
   .board { position: relative; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line-2); background: #1f4329; line-height: 0;
@@ -224,6 +228,11 @@
   <div class="brand">
     <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#ffb829"/><path d="M5 9l3.5 3L12 7l3.5 5L19 9l-1.2 7.4H6.2z" fill="#1a1200"/></svg>
     <b>Arena replay</b><span>cr-sim</span>
+    <div class="pick" id="pick" hidden>
+      <button class="btn" id="prev-m" type="button" aria-label="Previous match" title="Previous match (P)">‹</button>
+      <select id="matches" aria-label="Choose a match"></select>
+      <button class="btn" id="next-m" type="button" aria-label="Next match" title="Next match (N)">›</button>
+    </div>
   </div>
 
   <div class="msg" id="msg"><div class="spin"></div><span>Loading the replay…</span></div>
@@ -870,8 +879,9 @@ function normalise(d) {
   const m = d.meta;
   const fr = d.frames.map((f) => [f.t, f.crowns, f.elixir, f.ents.map((e) => [e[6], e[0], e[1], e[2], e[3], e[4], e[5], e[7] || 0, e[7] || 0])]);
   return { meta: Object.assign({}, m, { ticks: fr.length ? fr[fr.length - 1][0] : 0, regulation: m.regulation || m.tps * 180, faithful: true }),
-    frames: fr, events: null,
-    match: { p0: "Blue", p1: "Red", outcome: m.outcome, crowns: m.crowns, seed: m.seed, level: m.level } };
+    frames: fr, events: d.events || null,
+    match: { p0: m.p0 || "Blue", p1: m.p1 || "Red", outcome: m.outcome, crowns: m.crowns, seed: m.seed, level: m.level,
+             deck0: m.deck0, deck1: m.deck1 } };
 }
 function start(data) {
   T = normalise(data); meta = T.meta; frames = T.frames; events = T.events || [];
@@ -1051,6 +1061,39 @@ function read(file) {
 }
 addEventListener("dragover", (e) => e.preventDefault());
 addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) read(f); });
-fetch("trace.json").then((r) => { if (!r.ok) throw 0; return r.json(); }).then(start)
-  .catch(() => ask("No replay loaded", "Record a match, then open the trace it writes or drop it on this page."));
+// replays/index.json (written by replay.py) lists recorded matches; ?m=<file> picks one.
+// Without it, a trace.json next to this page loads by itself.
+let list = [], cur = -1;
+const getJSON = (u) => fetch(u, { cache: "no-store" }).then((r) => { if (!r.ok) throw 0; return r.json(); });
+function openMatch(i, push) {
+  if (i < 0 || i >= list.length) return;
+  cur = i; $("matches").value = String(i);
+  $("next-b").hidden = i + 1 >= list.length;
+  if (push) history.replaceState(null, "", "?m=" + encodeURIComponent(list[i].file));
+  setPlaying(false);
+  getJSON("replays/" + encodeURIComponent(list[i].file)).then(start)
+    .catch(() => ask("Can't load that match", list[i].file));
+}
+function nextMatch(d) { if (list.length) openMatch(Math.max(0, Math.min(list.length - 1, cur + d)), true); }
+$("matches").addEventListener("change", (e) => openMatch(+e.target.value, true));
+$("prev-m").addEventListener("click", () => nextMatch(-1));
+$("next-m").addEventListener("click", () => nextMatch(1));
+$("next-b").addEventListener("click", () => nextMatch(1));
+addEventListener("keydown", (e) => {
+  if (!list.length || e.target.matches("input:not([type=range]), select")) return;
+  if (e.key === "n" || e.key === "N") nextMatch(1);
+  else if (e.key === "p" || e.key === "P") nextMatch(-1);
+});
+if (window.EMBEDDED_TRACE) start(window.EMBEDDED_TRACE);   // a match folder's own index.html carries its replay
+else getJSON("replays/index.json").then((idx) => {
+  if (!Array.isArray(idx) || !idx.length) throw 0;
+  list = idx;
+  const mark = { win: "W", loss: "L", draw: "D" };
+  $("matches").innerHTML = idx.map((r, i) => `<option value="${i}">#${i + 1} · ${esc(r.p0)} vs ${esc(r.p1)} · seed ${esc(r.seed)} · ${mark[r.result] || "?"} ${r.crowns[0]}–${r.crowns[1]}</option>`).join("");
+  $("pick").hidden = false; $("keys-nav").hidden = false;
+  const want = new URLSearchParams(location.search).get("m");
+  const at = idx.findIndex((r) => r.file === want);
+  openMatch(at >= 0 ? at : 0, false);
+}).catch(() => getJSON("trace.json").then(start)
+  .catch(() => ask("No replay loaded", "Run bot.py to record matches, or open a trace file / drop one on this page.")));
 </script>

@@ -87,8 +87,8 @@ def my_bot2(obs):
         return (s, clamp(int(tx), 0, 17), clamp(int(ty), 0, 14))
     return my_bot(obs)
 
-# ============ THE EVIL BOT ============
-class EvilBot:
+# ============ THE EVIL BOT (v1, kept for benchmarking) ============
+class EvilBotV1:
     # a class so it can remember when it last played a card
 
     def __init__(self, cooldown=20):
@@ -162,31 +162,140 @@ class EvilBot:
 
         return None
 
+# ============ THE EVIL BOT (v2: defensive, elixir-disciplined) ============
+import json, os
+_CARDS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     "gym", "data", "cards.json")))["cards"]
+
+def hits_air(name):
+    c = _CARDS.get(name, {})
+    return c.get("targets") in ("air", "both") and not c.get("target_buildings_only")
+
+def power(name):
+    # rough total hit points a card puts on the board
+    c = _CARDS.get(name, {})
+    return c.get("hp", 0) * c.get("count", 1)
+
+def enemy_troops(obs):
+    # (name, x, y, hp, flying) for every enemy non-tower unit
+    return [(e[1], e[2], e[3], e[4], e[6]) for e in obs["entities"]
+            if e[0] == 1 and "tower" not in e[1]]
+
+class EvilBot:
+    # Plays defense first: waits for the enemy to commit, answers with the cheapest
+    # card that can actually deal with what is coming, and keeps an elixir reserve.
+
+    def __init__(self, cooldown=10, reserve=3):
+        self.cooldown = cooldown      # ticks between plays (20 ticks = 1 second)
+        self.reserve = reserve        # elixir kept back when not under threat
+        self.last_play = -9999
+
+    def __call__(self, obs):
+        if obs["tick"] < self.last_play:      # new game started, reset memory
+            self.last_play = -9999
+        if obs["tick"] - self.last_play < self.cooldown:
+            return None
+        action = self.decide(obs)
+        if action is not None:
+            self.last_play = obs["tick"]
+        return action
+
+    # ---- defense ----
+    def defend(self, obs):
+        enemies = enemy_troops(obs)
+        incoming = [u for u in enemies if u[2] < (18 if u[4] else 15)]
+        if not incoming:
+            return None
+        lead = min(incoming, key=lambda u: u[2])          # closest to our towers
+        group = [u for u in enemies if abs(u[1] - lead[1]) <= 4 and abs(u[2] - lead[2]) <= 4]
+        threat = sum(u[3] for u in group)
+        if threat < 300:                                   # a lone scrap, towers can take it
+            return None
+        air = any(u[4] for u in group)
+        mine = [(n, x, y) for n, x, y in units(obs, 0) if abs(x - lead[1]) <= 5 and abs(y - lead[2]) <= 5]
+        covered = sum(_CARDS.get(n, {}).get("hp", 0) for n, _, _ in mine)
+        if covered >= threat * 0.8:                        # already answered, save elixir
+            return None
+
+        need = (threat - covered) * 0.5
+        options = []
+        for i in range(4):
+            if not obs["legal"][i]:
+                continue
+            name = obs["hand"][i]
+            if name in SPELLS:
+                continue
+            if name in BUILDINGS:
+                # a building only distracts: good against building-targeters, useless vs air
+                if name == "barbarian_hut" and all(_CARDS.get(u[0], {}).get("target_buildings_only") for u in group):
+                    options.append((i, obs["hand_cost"][i], 10**6, name))
+                continue
+            if air and not hits_air(name):
+                continue
+            options.append((i, obs["hand_cost"][i], power(name), name))
+        if not options:
+            return None
+        enough = [o for o in options if o[2] >= need]
+        best = min(enough, key=lambda o: (o[1], -o[2])) if enough else max(options, key=lambda o: o[2])
+        i, _, _, name = best
+        x = clamp(int(lead[1]), 1, 16)
+        if name in BUILDINGS:
+            return (i, 9, 9)
+        # drop it a bit behind the enemy, close to our towers so they help
+        y = clamp(int(lead[2]) - 3, 6, 12)
+        return (i, x, y)
+
+    # ---- offense ----
+    def attack(self, obs, fast):
+        elixir = obs["elixir"]
+        if elixir < (8 if fast else 9.5):                  # only push from a full bar
+            return None
+        left, right = enemy_tower_hp(obs)
+        lane_x = 3 if left <= right else 14
+        s = pick(obs, "troop", cheapest=False)
+        if s is None:
+            return None
+        return (s, lane_x, 11)                             # behind the bridge, not on it
+
+    def decide(self, obs):
+        fast = obs["phase"] != "single"
+        action = self.defend(obs)
+        if action is not None:
+            return action
+        # leave breathing room for a defense unless we are about to waste income at 10
+        if obs["elixir"] - self.reserve < 0 and obs["elixir"] < 9.5:
+            return None
+        return self.attack(obs, fast)
+
 # ============ testing ============
+import sys
+from replay import Recorder, serve
+
 seen_cards = set()
 problems = {}
 
-def play_game(bot0, bot1, seed):
-    b = cr_sim.Battle()
-    b.reset(seed, "default", "default")
-    v0 = b.view(0)
-    v1 = b.view(1)
-    while v0.result() is None:
-        o0 = v0.observe()
-        seen_cards.update(o0["hand"])
-        seen_cards.add(o0["next_card"])
-        if o0["last_action"] not in ("ok", "none"):
-            problems[o0["last_action"]] = problems.get(o0["last_action"], 0) + 1
-        b.step(bot0(o0), bot1(v1.observe()))
-    return v0.result()
+def watched(bot):
+    # wraps a bot to note the cards it sees and any of its moves the sim rejected
+    def run(obs):
+        seen_cards.update(obs["hand"])
+        seen_cards.add(obs["next_card"])
+        if obs["last_action"] not in ("ok", "none"):
+            problems[obs["last_action"]] = problems.get(obs["last_action"], 0) + 1
+        return bot(obs)
+    return run
 
-def test(bot0, bot1, name, games=30):
+rec = Recorder()     # every match below is saved to gym/viewer/replays/
+
+def test(bot0, bot1, name0, name1, games=30):
     counts = {"win": 0, "loss": 0, "draw": 0}
     for seed in range(games):
-        counts[play_game(bot0, bot1, seed)] += 1
-    print(name, counts)
+        counts[rec.play(watched(bot0), bot1, seed, name0, name1)] += 1
+    print(f"{name0} vs {name1}:".ljust(16), counts)
 
-test(EvilBot(), random_bot, "evil vs random:")
-test(EvilBot(), my_bot2,    "evil vs v2:    ")
+test(EvilBot(), random_bot, "evil", "random")
+test(EvilBot(), my_bot2,    "evil", "v2")
 print("cards in default deck:", sorted(seen_cards))
 print("evil's rejected moves:", problems)
+
+if "--no-view" not in sys.argv:
+    serve()          # open the replay viewer in the browser; Ctrl+C to stop
